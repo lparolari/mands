@@ -59,8 +59,6 @@ export const Canvas = (props: CanvasProps) => {
     const [position, setPosition] = useState<PositionT>(Position.zero);
     const [isPressed, setPressed] = useState(false);
 
-    console.log(canvasRef);
-
     useEffect(() => {
         if (isPressed) {
             pipe(
@@ -105,7 +103,7 @@ export const Canvas = (props: CanvasProps) => {
 
     const handleMouseLeave = () => setPressed(false);
 
-    return <p>test</p> || <canvas 
+    return <canvas 
         ref={canvasRef} 
         style={{backgroundColor: "white"}} 
         onMouseMove={handleMouseMove} 
