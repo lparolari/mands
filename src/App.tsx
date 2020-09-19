@@ -1,10 +1,9 @@
 import React from "react";
 import logo from "./logo-white.svg";
 import "./App.css";
-import { Canvas } from "./Cavas";
 import { Mandala } from "./Mandala";
 
-function App() {
+function App(): React.ReactElement {
   return (
     <div className="App">
       <header className="App-header">

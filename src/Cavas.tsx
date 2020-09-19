@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import * as O from "fp-ts/lib/Option";
 import { identity, pipe } from "fp-ts/lib/function";
 import { Coord, Position } from "./types";
@@ -19,7 +19,7 @@ type CanvasCtx = CanvasRenderingContext2D;
 type PositionT = Position.Position;
 type RenderT = (ctx: CanvasCtx) => (pos: PositionT) => void;
 
-export const clear = (canvasRef: CanvasRef) => {
+export const clear = (canvasRef: CanvasRef): O.Option<CanvasCtx> =>
   pipe(
     getCanvas(canvasRef),
     O.chain(getContext),
@@ -28,8 +28,6 @@ export const clear = (canvasRef: CanvasRef) => {
       return O.some(ctx);
     })
   );
-};
-
 const getRect = (ctx: CanvasCtx) => ctx.canvas.getBoundingClientRect();
 
 const getCanvas = (canvasRef: CanvasRef): O.Option<CanvasEl> =>
@@ -48,7 +46,7 @@ export const Canvas = ({
   width,
   height,
   ...props
-}: CanvasProps) => {
+}: CanvasProps): React.ReactElement => {
   const [mousePos, setMousePos] = useState<PositionT>(Position.zero);
   const [leftClick, setLeftClick] = useState(false);
 

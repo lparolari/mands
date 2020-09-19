@@ -65,7 +65,7 @@ export const Mandala = ({
   defaultHeight = 450,
   defaultPens = 8,
   defaultPenColor = "#000000",
-}: Props) => {
+}: Props): React.ReactElement => {
   const canvasRef = useRef<CanvasEl>(null);
 
   const [width, setWidth] = useState(defaultWidth);
