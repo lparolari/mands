@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+
+  yarn:
+    container_name: mands-yarn
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: yarn
+    tty: true
+    stdin_open: true
+
+  web:
+    container_name: mands-web
+    build:
+      context: .
+      dockerfile: Dockerfile
+    expose: 
+      - "3000"
+    ports: 
+      - "3000:3000"
+    command: yarn start
+    volumes:
+      - ./:/app
+      - /app/node_modules
+    tty: true
+    stdin_open: true
