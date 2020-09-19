@@ -1,114 +1,103 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as O from "fp-ts/lib/Option"
-import * as A from "fp-ts/lib/Array"
-import { pipe } from "fp-ts/lib/function";
-import { Coord, Position, Point } from "./types"
+import { identity, pipe } from "fp-ts/lib/function";
+import { Coord, Position } from "./types"
 
-type CanvasProps = React.DetailedHTMLProps<React.CanvasHTMLAttributes<HTMLCanvasElement>, HTMLCanvasElement>;
+type CanvasProps = React.DetailedHTMLProps<React.CanvasHTMLAttributes<HTMLCanvasElement>, HTMLCanvasElement> & {
+    canvasRef: React.RefObject<CanvasEl>;
+    render: RenderT;
+    width: number;
+    height: number;
+};
 type CanvasRef = React.RefObject<HTMLCanvasElement>
 type CanvasEl = HTMLCanvasElement;
 type CanvasCtx = CanvasRenderingContext2D;
 
 type PositionT = Position.Position;
-type CoordT = Coord.Coord;
-type DegreeT = Point.Degree;
-type Size = Coord.Coord;
+type RenderT = (ctx: CanvasCtx) => (pos: PositionT) => void;
 
-const drawPoint = (ctx: CanvasCtx) => (position: PositionT)=> {
-    ctx.fillStyle = '#000000'
-    ctx.beginPath();
-    ctx.moveTo(position.prev.x, position.prev.y);
-    ctx.lineTo(position.current.x, position.current.y);
-    ctx.stroke()
-}
-
-const getRotations = (slices: number): DegreeT[] => pipe(
-    A.range(0, slices - 1), 
-    A.map((s) => (s * (360/slices))),
-);
-
-const toCenterBasis = (s: Size) => ({x, y}: CoordT): CoordT => {
-    return Coord.make(x - s.x / 2)(y - s.y / 2);
-}
-
-const toMatrixBasis = (s: Size) => ({x, y}: CoordT): CoordT => {
-    return Coord.make(x + s.x / 2)(y + s.y / 2);
-}
-
-const normalize = (f: (c: CoordT) => CoordT) => (position: PositionT) => Position.make(f(position.prev))(f(position.current))
-
-const getPoints = (containerSize: Size) => (n: number) => (position: PositionT): PositionT[] => {
-    const normalization = toCenterBasis(containerSize);
-    const normalizationInverse = toMatrixBasis(containerSize);
-    return pipe(
-        A.zip(getRotations(n), A.replicate(n, normalize(normalization)(position))),
-        A.map(([rotation, position]) => Position.rotate(rotation)(position)),
-        A.map((position) => normalize(normalizationInverse)(position)),
+export const clear = (canvasRef: CanvasRef) => {
+    pipe(
+        getCanvas(canvasRef),
+        O.chain(getContext),
+        O.chain((ctx) => {
+            ctx.clearRect(0, 0, getRect(ctx).right, getRect(ctx).bottom);
+            return O.some(ctx);
+        })
     )
 }
 
-const makeContainerSize = (x: number) => (y: number): Size => ({x: x, y: y})
+const getRect = (ctx: CanvasCtx) => ctx.canvas.getBoundingClientRect();
 
-const getCanvas = (canvasRef: CanvasRef): O.Option<CanvasEl> => O.fromNullable(canvasRef.current);
+const getCanvas = (canvasRef: CanvasRef): O.Option<CanvasEl> => pipe(
+    canvasRef, 
+    O.fromNullable, 
+    O.chain((ref) => O.fromNullable(ref.current)));
 
 const getContext = (canvas: CanvasEl) => O.fromNullable(canvas.getContext('2d'));
 
-export const Canvas = (props: CanvasProps) => {
-    const canvasRef = useRef<CanvasEl>(null);
+export const Canvas = ({canvasRef, render, width, height, ...props}: CanvasProps) => {
+    const [mousePos, setMousePos] = useState<PositionT>(Position.zero);
+    const [leftClick, setLeftClick] = useState(false);
 
-    const [position, setPosition] = useState<PositionT>(Position.zero);
-    const [isPressed, setPressed] = useState(false);
+    const getCanvasContext: O.Option<CanvasCtx> = pipe(getCanvas(canvasRef), O.chain(getContext));
+
+    const renderFromPosition = (position: PositionT) => (ctx: CanvasCtx): O.Option<CanvasCtx> => {
+        render(ctx)(position);
+        return O.some(ctx);
+    }
+
+    const renderWithContext = () => pipe(getCanvasContext, O.chain(renderFromPosition(mousePos)))
+
+    const saveMousePos = (clientX: number, clientY: number) => (ctx: CanvasCtx): O.Option<PositionT> => {
+        const rect = ctx.canvas.getBoundingClientRect();
+
+        const newPosition = Coord.make(clientX - rect.left)(clientY - rect.top);
+        const prevPosition = mousePos.current;
+
+        const pos = Position.make(prevPosition)(newPosition);
+        setMousePos(pos)
+
+        return O.some(pos);
+    };
 
     useEffect(() => {
-        if (isPressed) {
-            pipe(
-                getCanvas(canvasRef),
-                O.chain(getContext),
-                O.chain((ctx) => {
-                    const rect = ctx.canvas.getBoundingClientRect();
-                    const containerSize = makeContainerSize(rect.width)(rect.height);
-
-                    getPoints(containerSize)(8)(position).forEach(drawPoint(ctx))
-
-                    return O.some(ctx);
-                })
-            )
-        }
-      }, [position, isPressed] )
-  
-    const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement, MouseEvent>): void => {
         pipe(
-            getCanvas(canvasRef),
-            O.chain(getContext),
-            O.chain((ctx) => {
-                const rect = ctx.canvas.getBoundingClientRect();
-
-                const newPosition = Coord.make(event.clientX - rect.left)(event.clientY - rect.top);
-                const prevPosition = position.current;
-                setPosition(Position.make(prevPosition)(newPosition))
-
-                return O.some(ctx);
-            }));
-    }
+            leftClick, 
+            O.fromPredicate(identity), 
+            O.chain(renderWithContext)
+        )
+      }, [mousePos, leftClick] )
+  
+    const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement, MouseEvent>): O.Option<PositionT> => 
+        pipe(
+            getCanvasContext,
+            O.chain(saveMousePos(event.clientX, event.clientY))
+        );
 
     const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement, MouseEvent>) => {
         if (event.button === 0)
-            setPressed(true);
+            setLeftClick(true);
     }
 
     const handleMouseUp = (event: React.MouseEvent<HTMLCanvasElement, MouseEvent>) => {
         if (event.button === 0)
-            setPressed(false);
+            setLeftClick(false);
     }
 
-    const handleMouseLeave = () => setPressed(false);
+    const handleMouseEnter = handleMouseMove;
+
+    const handleMouseLeave = () => setLeftClick(false);
 
     return <canvas 
-        ref={canvasRef} 
+        ref={canvasRef}
+        width={width}
+        height={height}
         style={{backgroundColor: "white"}} 
         onMouseMove={handleMouseMove} 
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
+        onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         {...props} />
 }
